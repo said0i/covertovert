@@ -1,71 +1,104 @@
 from CovertChannelBase import CovertChannelBase
+import random
 from scapy.all import IP, UDP, sniff, NTP
+import time
 
 class MyCovertChannel(CovertChannelBase):
     def __init__(self):
         super().__init__()
 
-    def encode_stratum(self, bit):
+    def encode_stratum(self, bit,seperator):
         """
         code the binary bit to Stratum field of NTP packet
-        0 -> Stratum = 5  --- example: 0 -> Stratum = 5
-        1 -> Stratum = 10 --- example: 1 -> Stratum = 10  
+        0 -> Stratum is less than 8  --- example: 0 -> Stratum = 5
+        1 -> Stratum is between 8 and 16 --- example: 1 -> Stratum = 10  
         """
-        return 5 if bit == '0' else 10
+        return random.randrange(seperator) if bit == '0' else random.randrange(seperator, 16)
 
-    def decode_stratum(self, stratum):
+    def decode_stratum(self, stratum,seperator):
         # Solve the Stratum field of NTP packet to binary bit
-        return '0' if stratum == 5 else '1'
+        return '0' if stratum < seperator else '1'
 
-    def send(self, log_file_name, target_ip, interface):
-        # Rastgele bir mesaj oluşturur, binary formata çevirir ve NTP paketlerinin Stratum alanı kullanılarak gönderir.
-        # Rastgele bir binary mesaj oluştur ve logla
-        binary_message = self.generate_random_binary_message_with_logging(log_file_name)
+    def send(self, seperator_val, target_ip, port, log_file_name):
+        # Create a random message and convert it to binary then send it using Stratum field in NTP.
+        # Create a binary message with logging 
+        #binary_message = self.generate_random_binary_message_with_logging(log_file_name)
+        binary_message = self.generate_random_binary_message_with_logging(log_file_name,min_length=16,max_length=16)
 
-        print(f"Gönderilecek binary mesaj: {binary_message}")
+        #print(f"Binary message: {binary_message}")
+        
 
-        for bit in binary_message:
-            # Binary bit'i Stratum alanına kodla
-            stratum_value = self.encode_stratum(bit)
-
-            # NTP paketi oluştur
+        for i,bit in enumerate(binary_message):
+            # encode the bit to Stratum field
+            stratum_value = self.encode_stratum(bit,seperator_val)
+            '''
+            # Create NTP packet with Stratum field
+            ntp_payload = (
+                b'\x1b'  # Leap Indicator (LI), Version, Mode
+                + bytes([value])  # Stratum field (8 bits)
+                + b'\x00' * 47  # Padding for rest of the NTP packet
+            )
+            
+            # Wrap in UDP and IP layers
+            packet = IP(dst=self.target_ip) / UDP(sport=123, dport=123) / Raw(load=ntp_payload)
+            
+            # Send packet
+            send(packet, verbose=False)
+            print(f"[*] Sent packet with Stratum value: {value}")
+            '''
+            # Create the NTP packet
             ntp_packet = (
                 IP(dst=target_ip) /
-                UDP(sport=12345, dport=123) /
+                UDP(sport=port, dport=port) /
                 NTP(stratum=stratum_value)
             )
 
-            # Paketi gönder
-            self.send(ntp_packet, interface=interface)
-            self.sleep_random_time_ms(5, 15)  # Her paket arasında rastgele bekle
+            if i == 0:
+                #start timer
+                start_time = time.time()
+            # Send the packet
+            CovertChannelBase.send(self,ntp_packet)
+            #self.sleep_random_time_ms(5, 15)  # Wait for a random time between 5 and 15 ms
+        #stop timer
+        end_time = time.time()
+        passed_time = end_time - start_time
+        print(f"Message sent successfully. Time elapsed: {passed_time} seconds, bitrate: {len(binary_message) / passed_time} bits/second")
 
-        print("Mesaj gönderimi tamamlandı.")
-
-    def receive(self, interface, packet_count, log_file_name):
-        # Gelen NTP paketlerini dinler, Stratum alanındaki bilgiyi çözer ve orijinal mesajı loglar.
-
+    def receive(self, port, log_file_name,seperator_val):
+        # Listen to the incoming NTP packets, decode the information in the Stratum field, and log the original message.
+        self.char_bits = 0
+        self.received_chars = 0
+        self.decoded_message = ""
+        self.last_char = ' '
         def packet_callback(packet):
             if packet.haslayer(NTP):
-                # Stratum alanını al
+                # Get the Stratum field value from the NTP packet
                 stratum_value = packet[NTP].stratum
-                # Binary olarak çöz
-                self.received_binary_message += self.decode_stratum(stratum_value)
-
-        print("Mesaj alımı başlatılıyor...")
+                # Decode to binary 
+                self.received_binary_message += self.decode_stratum(stratum_value,seperator_val)
+                self.char_bits += 1
+                print(f"Received bit: {self.decode_stratum(stratum_value,seperator_val)}")
+        def stop_sniffing(packet):
+            if self.char_bits == 8:
+                self.last_char = self.convert_eight_bits_to_character(self.received_binary_message[self.received_chars * 8:self.received_chars * 8 + 8])
+                self.decoded_message += self.last_char
+                self.received_chars += 1
+                self.char_bits = 0
+                print(f"Received character: {self.last_char},received_chars: {self.received_chars}")
+                if self.last_char == '.':
+                    return True
+        
+        print("Receiving the message...")
         self.received_binary_message = ""
         
         # Belirtilen sayıda paketi dinle
-        sniff(filter="udp port 123", iface=interface, prn=packet_callback, count=packet_count)
+        sniff(filter=f"udp port {port}", prn=packet_callback, stop_filter=stop_sniffing)
 
         # Binary mesajı orijinal metne çevir
-        decoded_message = ''.join(
-            self.convert_eight_bits_to_character(self.received_binary_message[i:i + 8])
-            for i in range(0, len(self.received_binary_message), 8)
-        )
 
         # Mesajı logla
-        self.log_message(decoded_message, log_file_name)
-        print(f"Alınan mesaj: {decoded_message}")
+        self.log_message(self.decoded_message, log_file_name)
+        print(f"Alınan mesaj: {self.decoded_message}")
 
 
 

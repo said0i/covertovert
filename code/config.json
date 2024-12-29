@@ -2,16 +2,16 @@
   "covert_channel_code": "CSC-PSV-NTP-STR",
   "send": {
     "parameters": {
-      "parameter1": "p1",
-      "parameter2": 1234,
+      "seperator_val":8,
+      "target_ip": "172.18.0.3",
+      "port": 123,
       "log_file_name": "Example_UDPTimingInterarrivalChannelSender.log"
     }
   },
   "receive": {
     "parameters": {
-      "parameter1": "p1",
-      "parameter2": 1234,
-      "parameter3": "p3",
+      "seperator_val":8,
+      "port": 123,
       "log_file_name": "Example_UDPTimingInterarrivalChannelReceiver.log"
     }
   }
