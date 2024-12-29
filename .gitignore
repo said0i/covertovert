@@ -24,3 +24,6 @@ go.work.sum
 .DS_Store
 .*
 _*
+
+#submission folder
+submission/
