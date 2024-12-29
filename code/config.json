@@ -2,17 +2,29 @@
   "covert_channel_code": "CSC-PSV-NTP-STR",
   "send": {
     "parameters": {
-      "parameter1": "p1",
-      "parameter2": 1234,
-      "log_file_name": "Example_UDPTimingInterarrivalChannelSender.log"
+      "log_file_name": "Example_Sender.log",
+      "target_ip": "192.168.1.100",
+      "interface": "eth0"
     }
   },
   "receive": {
     "parameters": {
-      "parameter1": "p1",
-      "parameter2": 1234,
-      "parameter3": "p3",
-      "log_file_name": "Example_UDPTimingInterarrivalChannelReceiver.log"
+      "interface": "eth0",
+      "packet_count": 100,
+      "log_file_name": "Example_Receiver.log"
     }
+  },
+  "stratum_values": {
+    "0": 5,
+    "1": 10
+  },
+  "timing": {
+    "start_ms": 5,
+    "end_ms": 15
+  },
+  "message_length": {
+    "min": 50,
+    "max": 100
   }
 }
+
